@@ -6,7 +6,7 @@
 
 import sys
 import os, shutil
-sys.path.append('..')  # to import from GP.kernels and property_predition.data_utils
+sys.path.append('..')  # To import from GP.kernels and property_predition.data_utils
 import random
 
 import gpflow
@@ -49,23 +49,24 @@ def main():
 
     ############################
     ### parameters for GB-GA ###
-    # GA parameter
+    # GA parameters
     nstep = 100
     target_pool = 1000
     target_value = 0.041421
     
-    # set range of number of heavy atoms in molecule
+    # Set range of number of heavy atoms in molecule
     co.average_size = 14
     co.size_stdev = 5
     co.string_type = 'SMILES'
     
-    # gaussian noise range for selection
+    # Gaussian noise range for selection
     gau_sigma = 0.001
     ############################
     
     ####################################
-    ### initial mutation probability ###
-    # make individual probability array for each mutation group, and then merge all
+    ### Initial mutation probability ###
+    # Make individual probability array for each mutation group, and then merge all
+    # In the design of D-luc analogues, some mutations are forced to be forbidden
     p_part = [0.5, 0.075, 0.07, 0.07, 0.07, 0.07, 0.07, 0.075]
     p_individual = []
     p_individual.append([0.175, 0.175, 0.175, 0., 0.2, 0.2, 0.075])       # p_insert_atom(C1,N1,O1,F1,C2,N2,C3)
@@ -84,12 +85,13 @@ def main():
 
     # Initial genetic pool generation
     GenPool = []
-    for elements in smiles_list[:187]: # Molecules in the initial iteration
+    for elements in smiles_list[:196]: # Molecules in the initial iteration
         GenPool.append(elements)
  
     with open(f"log_mutation", "w") as f: # Initialize mutation log
         f.write("")
 
+    print("#cycle  cut/mean/std  total_pool(from selection+from crossover&mutation)  number_of_crossover  number_of_mutation  number_of_repetition  SAS_mean/std", flush=True)
     for istep in range(nstep):
         mu_prob, GenPool = GB_GA(mu_prob, model, GenPool, istep, y_scaler, target_value, gau_sigma, target_pool)
 
@@ -97,7 +99,7 @@ def main():
 # Calculation functions
 #################################################################################################
 
-# model generation code from FlowMO sample
+# Model generation from FlowMO example code
 def GPRmodelgen(X, y):
     # Function to minimize in prior optimization
     m1 = None
@@ -105,7 +107,7 @@ def GPRmodelgen(X, y):
         return -m1.log_marginal_likelihood()
     
     # Separate test & train set in given data
-    # all db is used in training(by small test size)
+    # all molecules in the db are used in training(by minimalize test size)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.001)
     y_train = y_train.reshape(-1, 1)
     y_test = y_test.reshape(-1, 1)
@@ -137,7 +139,6 @@ def GPRmodelgen(X, y):
 
     return m1, y_scaler
 
-
 def GB_GA(mu_prob, model, GenPool, istep, y_scaler, target_value, gau_sigma, target_pool):
     # Arrays for mutation evalutation
     mu_eval = [0, [0] * 7, [0] * 4, [0] * 1, [0] * 4, [0] * 5, [0] * 7, [0] * 12]
@@ -160,13 +161,12 @@ def GB_GA(mu_prob, model, GenPool, istep, y_scaler, target_value, gau_sigma, tar
     y_pred, y1_var = model.predict_f(GenPool_fp)
     y_pred = y_scaler.inverse_transform(y_pred)
 
-
     # Set criteria for cutting limit of fitness value 
     sort_a = []  # array for cutting criteria
     score = []
 
     for imol in range(len(y_pred)):
-        gau_target = np.random.normal(target_value, gau_sigma) # apply gaussian noise in the generation model
+        gau_target = np.random.normal(target_value, gau_sigma) # Apply gaussian noise in the generation model
         diff = abs(gau_target - y_pred[imol][0])
 #        score =  (1 / diff) * math.exp(-0.5 * ((max(sas_list[imol], SA_mu) - SA_mu) / SA_sigma) ** 2)  # using heu score
     
@@ -175,89 +175,92 @@ def GB_GA(mu_prob, model, GenPool, istep, y_scaler, target_value, gau_sigma, tar
         sort_a.append(diff)
 
     sort_a.sort()
-    cut = sort_a[int(len(sort_a) * 0.2)] # cutoff value for selection
+    cut = sort_a[int(len(sort_a) * 0.2)] # Cutoff value for selection
 
-    X_parents1 = []  # obtain from selection
-    X_parents2 = []  # obtain from crossover & mutation
-    mol_list = [] # array for statistical analysis of high-score molecules
+    X_parents1 = []  # Array for parents molecules, obtain from selection
+    X_parents2 = []  # Array for parents molecules, obtain from crossover & mutation
+    mol_list = [] # Array for statistical analysis of high-score molecules
   
     #### Selection ####
-    if (istep == 0): # pass selection in the first step
+    if (istep == 0): # Pass selection step in the first step
         X_parents1 = GenPool
     else:
-        over_cut = f"High-score molecules based on the cutoff : {cut:9.5f} (a.u.)\n" # molecules which fitness is over than cutoff
-        less_cut = f"\nLow-score molecules based on the cutoff : {cut:9.5f} (a.u.)\n" # molecules which fitness is less than cutoff
+        over_cut = f"High-score molecules based on the cutoff : {cut:9.5f} (a.u.)\n" # Molecules which fitness is over than cutoff
+        less_cut = f"\nLow-score molecules based on the cutoff : {cut:9.5f} (a.u.)\n" # Molecules which fitness is less than cutoff
         for imol in range(len(GenPool)):
             mol = Chem.MolFromSmiles(GenPool[imol])
-            if (sascorer.calculateScore(mol) > 3.5): # reject if molecule has bad sascore
+            if (sascorer.calculateScore(mol) > 3.5): # Reject if molecule has bad sascore
                 continue
             rand = random.random()
             diff = abs(target_value - y_pred[imol][0])
-            if (score[imol] < cut): # selection of high-ranked molecule
+            if (score[imol] < cut): # Selection of high-ranked molecule
                 X_parents1.append(GenPool[imol])
                 over_cut += f"{imol:8.0f} th molecule: {GenPool[imol]} , {y_pred[imol][0]:9.5f} (a.u.), {sas_list[imol]:7.2f}\n"
                 mol_list.append(y_pred[imol][0])
-            elif (score[imol] >= cut): # selection of low-ranked molecule
+            elif (score[imol] >= cut): # Selection of low-ranked molecule
                 less_cut += f"{imol:8.0f} th molecule: {GenPool[imol]} , {y_pred[imol][0]:9.5f} (a.u.), {sas_list[imol]:7.2f}\n"
-                if (rand >= 0.8): # selection depend on random number
+                if (rand >= 0.8): # Selection depends on random number
                     X_parents1.append(GenPool[imol]) 
 
+        # Logging step index
         with open(f"steps/INDEX_{istep}.dat", "w") as f:
             f.write(over_cut)
             f.write(less_cut)
+
     mean = np.mean(mol_list)
     std = np.std(mol_list)
-  
+
     #### Crossover & Mutation ####
-    ncross = 0 # number of crossover, for logging
-    nmut = 0 # number of mutation, for logging
-    need_offspring = target_pool - len(X_parents1) # number of molecules to be crossover & mutation, required for sustain pool size
-    gau_sigma_param = 0.5 # parameter for mutation
-  
+    ncross = 0 # Number of crossover, for logging
+    nmut = 0 # Number of mutation, for logging
+    need_offspring = target_pool - len(X_parents1) # Number of molecules to be crossover & mutation, required for sustain pool size
+    gau_sigma_param = 0.5 # Parameter for mutation
+
+    # Generate molecules until the pool reaches required pool size
     while (ncross < need_offspring):
            
         X_tmp1 = random.choice(X_parents1)
         X_tmp2 = random.choice(X_parents1)
-  
+
         mol1 = Chem.MolFromSmiles(X_tmp1)
         mol2 = Chem.MolFromSmiles(X_tmp2)
-                                     
+
         child = co.crossover(mol1,mol2)
-        
+
         if (child == None):
-            continue # exceptional case for return 'None'
-  
-        l_mut = False # logical to check mutation
-        if (random.random() > mu_prob[0]): 
+            continue # Exceptional case for return 'None'
+
+        l_mut = False # Logical to check mutation
+        if (random.random() > mu_prob[0]):
             l_mut = True
-  
+
             sum_prob = np.sum([sum(elements) for elements in mu_prob[1:]])
             mu_prob_fix = []
             for elements in mu_prob[1:]:
-                mu_prob_fix.append(elements/sum_prob) # normalize mutation probabilty
-            
+                mu_prob_fix.append(elements/sum_prob) # Normalize mutation probabilty
+
             mu_num, detailed_num, mutated_child = mu.mutate(child, mu_prob_fix)
-        
+
             if (mutated_child == None):
-                continue # exceptional case for return 'None'
+                continue # Exceptional case for return 'None'
   
-            eval_mutation = [child, mutated_child] # array for evalutate mutation
+            eval_mutation = [child, mutated_child] # Array for evalutate mutation
             child = mutated_child
-  
+
         cano_child = Chem.MolToSmiles(child, True)
-        #if molecule does not have thio- group, reject it
+        # If a molecule does not have thio- group, reject it
         if (featurise_mols([cano_child], 'fingerprints')[0][719] != 1 or featurise_mols([cano_child], 'fingerprints')[0][1216] != 1):
             continue
-        #if molecule does not have required sascore, reject it
+        # If a molecule does not have required sascore, reject it
         if (sascorer.calculateScore(child) > 3.5):
             continue
-        #if molecule already included in the pool, reject it
+        # If a molecule is already included in the pool, reject it
         if cano_child in X_parents2:
             continue
-  
+
         ncross += 1
-       
-        # routine for counting mutation numbers
+
+        # Routine for counting mutation numbers
         if (l_mut == True):
             nmut += 1
             mut_fp = featurise_mols([Chem.MolToSmiles(eval_mutation[0]), Chem.MolToSmiles(eval_mutation[1])], 'fingerprints')
@@ -272,22 +275,22 @@ def GB_GA(mu_prob, model, GenPool, istep, y_scaler, target_value, gau_sigma, tar
             score_1 =  abs(target_value - eval_mutation_value[0]) 
             score_2 =  abs(target_value - eval_mutation_value[1]) 
 
-            # record number of progressive and regressive mutations
+            # Record number of progressive and regressive mutations
             if (score_1 > score_2):
                 mu_eval[mu_num + 1][detailed_num] -= 1 
                 mu_eval_count[mu_num + 1][detailed_num] += 1
             elif (score_1 <= score_2):
                 mu_eval[mu_num + 1][detailed_num] += 1
                 mu_eval_count[mu_num + 1][detailed_num] += 1
-     
+
         X_parents2.append(cano_child)
 
-    #### mutation control step ####
+    #### Mutation control step ####
     norm_eval = [0, [0] * 7, [0] * 4, [0] * 1, [0] * 4, [0] * 5, [0] * 7, [0] * 12]
     eval_count = 0
     for elements in mu_eval_count[1:]: # do not consider mutation probability(mu_eval_count[0])
         eval_count += sum(elements)
-  
+
     for nmut_1 in range(1, len(mu_eval)):
         for nmut_2 in range(len(mu_eval[nmut_1])):
             norm_eval[nmut_1][nmut_2] = mu_eval[nmut_1][nmut_2] / eval_count # normalize probability
@@ -309,21 +312,21 @@ def GB_GA(mu_prob, model, GenPool, istep, y_scaler, target_value, gau_sigma, tar
                 log_mut += f"| {nmut_1:3.0f}  {nmut_2:3.0f}   -{gau_random:12.6f} {mu_prob[nmut_1][nmut_2]:12.6f}|\n"
     log_mut += "|--------------------------------------|\n"
 
-    # mutation probablity normalize when the probability of mutation fluctuates
+    # Mutation probablity normalize when the probability of mutation fluctuates
     sum_mu_prob = 0
     for elements in mu_prob[1:]:
         sum_mu_prob += sum(elements)
     for nmut_1 in range(1, len(mu_prob)):
         for nmut_2 in range(len(mu_prob[nmut_1])):
             mu_prob[nmut_1][nmut_2] /= (1 / (1 - mu_prob[0])) * sum_mu_prob
-  
-    #np.set_printoptions(suppress=True)
+
+    # np.set_printoptions(suppress=True)
     log_mut += f"updated array={mu_prob}\n\n"
 
     with open(f"log_mutation", "a") as f:
         f.write(log_mut)
 
-    #convert to canonical smiles and remove reapeated elements
+    # Convert to canonical smiles and remove reapeated elements
     GenPool = np.concatenate([X_parents1, X_parents2])
     GenPool_canonical = [Chem.MolToSmiles(Chem.MolFromSmiles(smi),True) for smi in GenPool]
 
@@ -335,8 +338,9 @@ def GB_GA(mu_prob, model, GenPool, istep, y_scaler, target_value, gau_sigma, tar
     repetition = len(GenPool)-len(GenPool_remove_rep)
     GenPool = GenPool_remove_rep
 
+    # Stdout in istep
     if (istep != 0):
-      print(f"cycle: {(istep+1):6.0f}, hcut/mean/std: {cut:10.5f} / {mean:8.5f} / {std:8.5f}, total pool: {len(GenPool):6.0f} ({len(X_parents1):6.0f}+{len(X_parents2):6.0f}) , # of crossover : {ncross:6.0f}, # of mutation : {nmut:6.0f}, # of repetition : {repetition:6.0f}, SAS_mean/std: {sas_mean:8.2f} / {sas_std:8.2f}", flush=True)
+      print(f"{(istep+1):6.0f}  {cut:10.5f} / {mean:8.5f} / {std:8.5f}  {len(GenPool):6.0f} ({len(X_parents1):6.0f} + {len(X_parents2):6.0f}) {ncross:6.0f} {nmut:6.0f} {repetition:6.0f} {sas_mean:8.2f} / {sas_std:8.2f}", flush=True)
 
     return mu_prob, GenPool
 
@@ -345,7 +349,7 @@ def GB_GA(mu_prob, model, GenPool, istep, y_scaler, target_value, gau_sigma, tar
 #################################################################################################
 
 if __name__ == "__main__":
-    # initialize output directory
+    # Initialize output directory
     path = "./steps"
     if (os.path.exists(path)):
         if (os.path.exists(path + "_old")):
