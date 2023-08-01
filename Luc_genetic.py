@@ -85,7 +85,7 @@ def main():
 
     # Initial genetic pool generation
     GenPool = []
-    for elements in smiles_list[:196]: # Molecules in the initial iteration
+    for elements in smiles_list:
         GenPool.append(elements)
  
     with open(f"log_mutation", "w") as f: # Initialize mutation log
